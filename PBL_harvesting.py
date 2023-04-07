@@ -15,6 +15,7 @@ import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 import pickle
+import requests
 
 #%% def
 
@@ -98,15 +99,42 @@ viafy = pbl_persons['viaf'].drop_duplicates().dropna().to_list()
 with open('viaf_wikidata_match.p', 'rb') as fp:
     viafy_wiki = pickle.load(fp)
 
+pbl_persons['wikidata'] = pbl_persons['viaf'].apply(lambda x: viafy_wiki.get(x))
 
-pbl_query[pbl_query['TW_TWORCA_ID'] == 2059]
+wikidata_ids = list(viafy_wiki.values())
+
+def get_wikidata_info(wikidata_url):
+# for wikidata_url in tqdm(wikidata_ids[1000:1050]):
+    # wikidata_url = wikidata_ids[0]
+    wikidata_id = re.findall('Q.+', wikidata_url)[0]
+    result = requests.get(f'https://www.wikidata.org/wiki/Special:EntityData/{wikidata_id}.json').json()
+    claims = ['P21', 'P19', 'P20', 'P569', 'P570']
+    temp_dict = {}
+    for claim in claims:
+        temp_dict.setdefault(claim, None)
+        try:
+            temp_dict[claim] = result.get('entities').get(wikidata_id).get('claims').get(claim)[0].get('mainsnak').get('datavalue').get('value').get('id', result.get('entities').get(wikidata_id).get('claims').get(claim)[0].get('mainsnak').get('datavalue').get('value').get('time'))
+        except (AttributeError, TypeError):
+            pass
+    wikidata_response[wikidata_url] = temp_dict
+
+wikidata_response = {}
+with ThreadPoolExecutor() as executor:
+    list(tqdm(executor.map(get_wikidata_info, wikidata_ids), total=len(wikidata_ids)))
+
+labels_dict = {'P21': 'gender', 'P569': 'born', 'P570': 'died', 'P19': 'birthPlace', 'P20': 'deathPlace'}
+
+for label in tqdm(labels_dict):
+    pbl_persons[labels_dict.get(label)] = pbl_persons['wikidata'].apply(lambda x: wikidata_response.get(x).get(label) if x in wikidata_response else x)
+
+pbl_persons.to_excel('test_persons.xlsx', index=False)
 
 
 # w pierwszej kolejności w person dać tylko twórców, dać im stałe identyfikatory, pobrać z wiki dodatkowe informacje
 # jak zdefiniować debiutantów? --> po 15.04 dane od PH z retro
 
 
-
+#%% notatki
 
 test = old_persons_file.sample(1000)
 
