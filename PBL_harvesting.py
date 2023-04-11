@@ -51,6 +51,21 @@ def query_wikidata_person_with_viaf(viaf):
     viafy_wiki[viaf] = results
     return results
 
+def get_wikidata_info(wikidata_url):
+# for wikidata_url in tqdm(wikidata_ids[1000:1050]):
+    # wikidata_url = wikidata_ids[0]
+    wikidata_id = re.findall('Q.+', wikidata_url)[0]
+    result = requests.get(f'https://www.wikidata.org/wiki/Special:EntityData/{wikidata_id}.json').json()
+    claims = ['P21', 'P19', 'P20', 'P569', 'P570']
+    temp_dict = {}
+    for claim in claims:
+        temp_dict.setdefault(claim, None)
+        try:
+            temp_dict[claim] = result.get('entities').get(wikidata_id).get('claims').get(claim)[0].get('mainsnak').get('datavalue').get('value').get('id', result.get('entities').get(wikidata_id).get('claims').get(claim)[0].get('mainsnak').get('datavalue').get('value').get('time'))
+        except (AttributeError, TypeError):
+            pass
+    wikidata_response[wikidata_url] = temp_dict
+
 #%%PBL connection
 
 dsn_tns = cx_Oracle.makedsn('pbl.ibl.poznan.pl', '1521', service_name='xe')
@@ -103,21 +118,6 @@ pbl_persons['wikidata'] = pbl_persons['viaf'].apply(lambda x: viafy_wiki.get(x))
 
 wikidata_ids = list(viafy_wiki.values())
 
-def get_wikidata_info(wikidata_url):
-# for wikidata_url in tqdm(wikidata_ids[1000:1050]):
-    # wikidata_url = wikidata_ids[0]
-    wikidata_id = re.findall('Q.+', wikidata_url)[0]
-    result = requests.get(f'https://www.wikidata.org/wiki/Special:EntityData/{wikidata_id}.json').json()
-    claims = ['P21', 'P19', 'P20', 'P569', 'P570']
-    temp_dict = {}
-    for claim in claims:
-        temp_dict.setdefault(claim, None)
-        try:
-            temp_dict[claim] = result.get('entities').get(wikidata_id).get('claims').get(claim)[0].get('mainsnak').get('datavalue').get('value').get('id', result.get('entities').get(wikidata_id).get('claims').get(claim)[0].get('mainsnak').get('datavalue').get('value').get('time'))
-        except (AttributeError, TypeError):
-            pass
-    wikidata_response[wikidata_url] = temp_dict
-
 # wikidata_response = {}
 # with ThreadPoolExecutor() as executor:
 #     list(tqdm(executor.map(get_wikidata_info, wikidata_ids), total=len(wikidata_ids)))
@@ -135,12 +135,61 @@ for label in tqdm(labels_dict):
     
 pbl_persons['debutant'] = pbl_persons['TW_TWORCA_ID'].apply(lambda x: x in debiutanci)
 pbl_persons = pbl_persons[['TW_TWORCA_ID', 'TW_IMIE', 'TW_NAZWISKO', 'gender', 'born', 'died', 'birthPlace', 'deathPlace', 'debutant']].rename(columns={'TW_TWORCA_ID': 'authorId', 'TW_IMIE': 'name', 'TW_NAZWISKO': 'surname'})
+pbl_persons['authorId'] = pbl_persons['authorId'].apply(lambda x: f"author_{x}")
 
 pbl_persons.to_excel('test_persons.xlsx', index=False)
 
 
 # w pierwszej kolejności w person dać tylko twórców, dać im stałe identyfikatory, pobrać z wiki dodatkowe informacje
 # jak zdefiniować debiutantów? --> po 15.04 dane od PH z retro
+
+
+###Journal
+
+pbl_query = """select * from IBL_OWNER.pbl_zrodla"""
+pbl_query = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
+
+pbl_journals = pbl_query.copy()[['ZR_ZRODLO_ID', 'ZR_TYTUL']].rename(columns={'ZR_ZRODLO_ID': 'journalId', 'ZR_TYTUL': 'name'})
+pbl_journals['journalId'] = pbl_journals['journalId'].apply(lambda x: f"journal_{x}")
+
+pbl_journals.to_excel('test_journals.xlsx', index=False)
+
+###JournalPiece
+pbl_query = """select * from IBL_OWNER.pbl_zapisy z
+full outer join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+full outer join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+where z.za_type like 'PU'"""
+pbl_query = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
+
+pbl_journal_pieces = pbl_query.copy()[['ZA_ZAPIS_ID', 'ZA_TYTUL', 'RZ_NAZWA', 'ZA_ZRODLO_NR', 'ZA_ZRODLO_STR']].rename(columns={'ZA_ZAPIS_ID': 'jPieceId', 'ZA_TYTUL': 'title', 'RZ_NAZWA': 'genre', 'ZA_ZRODLO_NR': 'number', 'ZA_ZRODLO_STR': 'numberOfPages'})
+
+pbl_journal_pieces['jPieceId'] = pbl_journal_pieces['jPieceId'].apply(lambda x: f"journalpiece_{x}")
+
+pbl_journal_pieces.to_excel('test_journal_pieces.xlsx', index=False)
+
+###Book
+pbl_query = """select * from IBL_OWNER.pbl_zapisy z
+full outer join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+where z.za_type like 'KS'"""
+pbl_query = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
+
+pbl_books = pbl_query.copy()[['ZA_ZAPIS_ID', 'ZA_TYTUL', 'ZA_RO_ROK', 'RZ_NAZWA', 'ZA_OPIS_FIZYCZNY_KSIAZKI']].rename(columns={'ZA_ZAPIS_ID': 'bookId', 'ZA_TYTUL': 'title', 'ZA_RO_ROK': 'year', 'RZ_NAZWA': 'genre', 'ZA_OPIS_FIZYCZNY_KSIAZKI': 'numberOfPages'})
+
+pbl_books['bookId'] = pbl_books['bookId'].apply(lambda x: f"book_{x}")
+
+pbl_books.to_excel('test_books.xlsx', index=False)
+
+###Publisher
+pbl_query = """select * from IBL_OWNER.pbl_wydawnictwa"""
+pbl_query = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
+
+pbl_publishers = pbl_query.copy()[['WY_WYDAWNICTWO_ID', 'WY_NAZWA', 'WY_MIASTO']].rename(columns={'WY_WYDAWNICTWO_ID': 'publisherId', 'WY_NAZWA': 'name', 'WY_MIASTO': 'locatedIn'})
+
+pbl_publishers['publisherId'] = pbl_publishers['publisherId'].apply(lambda x: f"publisher_{x}")
+
+pbl_publishers.to_excel('test_publishers.xlsx', index=False)
+
+
 
 
 #%% notatki
