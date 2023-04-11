@@ -118,14 +118,23 @@ def get_wikidata_info(wikidata_url):
             pass
     wikidata_response[wikidata_url] = temp_dict
 
-wikidata_response = {}
-with ThreadPoolExecutor() as executor:
-    list(tqdm(executor.map(get_wikidata_info, wikidata_ids), total=len(wikidata_ids)))
+# wikidata_response = {}
+# with ThreadPoolExecutor() as executor:
+#     list(tqdm(executor.map(get_wikidata_info, wikidata_ids), total=len(wikidata_ids)))
+    
+# with open('wikidata_response.p', 'wb') as fp:
+#     pickle.dump(wikidata_response, fp, protocol=pickle.HIGHEST_PROTOCOL)
+    
+with open('wikidata_response.p', 'rb') as fp:
+    wikidata_response = pickle.load(fp)
 
 labels_dict = {'P21': 'gender', 'P569': 'born', 'P570': 'died', 'P19': 'birthPlace', 'P20': 'deathPlace'}
 
 for label in tqdm(labels_dict):
     pbl_persons[labels_dict.get(label)] = pbl_persons['wikidata'].apply(lambda x: wikidata_response.get(x).get(label) if x in wikidata_response else x)
+    
+pbl_persons['debutant'] = pbl_persons['TW_TWORCA_ID'].apply(lambda x: x in debiutanci)
+pbl_persons = pbl_persons[['TW_TWORCA_ID', 'TW_IMIE', 'TW_NAZWISKO', 'gender', 'born', 'died', 'birthPlace', 'deathPlace', 'debutant']].rename(columns={'TW_TWORCA_ID': 'authorId', 'TW_IMIE': 'name', 'TW_NAZWISKO': 'surname'})
 
 pbl_persons.to_excel('test_persons.xlsx', index=False)
 
