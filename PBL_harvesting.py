@@ -189,8 +189,24 @@ pbl_publishers['publisherId'] = pbl_publishers['publisherId'].apply(lambda x: f"
 
 pbl_publishers.to_excel('test_publishers.xlsx', index=False)
 
+###Location
+kartoteka_miejsc_PBL = gsheet_to_df('1p6avLXYVk5M0kyWAF7zkVel1N7Nh4WH-ykPQN0tYK0c', 'Sheet1')
+kartoteka_miejsc_PBL = kartoteka_miejsc_PBL.loc[kartoteka_miejsc_PBL['status INO'] != 'INO']
+grouped = kartoteka_miejsc_PBL.groupby('query name')
 
+pbl_location = pd.DataFrame()
 
+for name, group in tqdm(grouped):
+    if any(pd.notnull(e) for e in group['decyzja'].to_list()):
+        test_df = group.loc[group['decyzja'] == 'tak']
+    else:
+        test_df = group.head(1)
+    pbl_location = pd.concat([pbl_location, test_df])
+    
+pbl_location = pbl_location[['geonamesId', 'query name', 'countryName']].rename(columns={'query name': 'city', 'geonamesId': 'locationId', 'countryName': 'country'})
+pbl_location['coordinates'] = ''
+
+pbl_location.to_excel('test_locations.xlsx', index=False)
 
 #%% notatki
 
