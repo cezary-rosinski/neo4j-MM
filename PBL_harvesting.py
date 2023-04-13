@@ -73,7 +73,7 @@ connection = cx_Oracle.connect(user=pbl_user, password=pbl_password, dsn=dsn_tns
 
 #%% Harvesting
 
-##Entities
+#%%Entities
 ###Person
 
 # old_persons_file = pd.read_excel(r"C:\Users\Cezary\Downloads\kartoteka osób - 11.10.2018 - gotowe_po_konfliktach.xlsx")
@@ -89,7 +89,7 @@ pbl_query = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
 # tw_tworca_id_new.to_excel('test.xlsx', index=False)
 
 mapowanie_bn_pbl = ['1_Bhwzo0xu4yTn8tF0ZNAZq9iIAqIxfcrjeLVCm_mggM', '1L-7Zv9EyLr5FeCIY_s90rT5Hz6DjAScCx6NxfuHvoEQ', '1cEz73dGN2r2-TTc702yne9tKfH9PQ6UyAJ2zBSV6Jb0']
-
+#UWAGA --> ogarnąć, że czy_ten_sam ma więcej akceptowalnych wartości
 df = pd.DataFrame()
 for file in tqdm(mapowanie_bn_pbl):
     temp_df = gsheet_to_df(file, 'pbl_bn')
@@ -207,6 +207,62 @@ pbl_location = pbl_location[['geonamesId', 'query name', 'countryName']].rename(
 pbl_location['coordinates'] = ''
 
 pbl_location.to_excel('test_locations.xlsx', index=False)
+
+###Prize
+pbl_query = """select * from pbl_zapisy z
+where z.za_type like 'IR'"""
+pbl_query = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
+
+pbl_prizes = pbl_query.copy()[['ZA_ZAPIS_ID', 'ZA_TYTUL']].rename(columns={'ZA_ZAPIS_ID': 'prizeId', 'ZA_TYTUL': 'name'})
+pbl_prizes['prizeId'] = pbl_prizes['prizeId'].apply(lambda x: f"prize_{x}")
+
+pbl_prizes.to_excel('test_prizes.xlsx', index=False)
+
+#%%Relations
+###PublishedIn
+
+pbl_query = """select * from pbl_zapisy z
+inner join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+where z.za_type in ('IZA', 'PU')"""
+pbl_query = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
+
+published_in = pbl_query.copy()[['ZA_ZAPIS_ID', 'ZR_ZRODLO_ID', 'ZA_RO_ROK']].rename(columns={'ZA_ZAPIS_ID': 'journalArticleId', 'ZR_ZRODLO_ID': 'journalId', 'ZA_RO_ROK': 'year'})
+published_in['journalArticleId'] = published_in['journalArticleId'].apply(lambda x: f"article_{x}")
+published_in['journalId'] = published_in['journalId'].apply(lambda x: f"journal_{x}")
+
+published_in.to_excel('test_published_in.xlsx', index=False)
+
+###PublishedBy
+
+pbl_query = """select * from pbl_zapisy z
+inner join IBL_OWNER.pbl_zapisy_wydawnictwa zw on zw.zawy_za_zapis_id=z.za_zapis_id
+inner join IBL_OWNER.pbl_wydawnictwa wy on wy.wy_wydawnictwo_id=zw.zawy_wy_wydawnictwo_id
+where z.za_type like 'KS'"""
+pbl_query = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
+
+published_by = pbl_query.copy()[['ZA_ZAPIS_ID', 'WY_WYDAWNICTWO_ID']].rename(columns={'ZA_ZAPIS_ID': 'bookId', 'WY_WYDAWNICTWO_ID': 'publisherId'})
+
+published_by['bookId'] = published_by['bookId'].apply(lambda x: f"book_{x}")
+published_by['publisherId'] = published_by['publisherId'].apply(lambda x: f"publisher_{x}")
+
+published_by.to_excel('test_published_by.xlsx', index=False)
+
+###WrittenBy
+pbl_query = """select * from pbl_zapisy z
+inner join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+inner join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+inner join IBL_OWNER.pbl_tworcy tw on tw.tw_tworca_id=zt.zatw_tw_tworca_id
+where z.za_type like 'KS'
+and rz.rz_nazwa like 'książka twórcy (podmiotowa)'"""
+pbl_query = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
+
+#UWAGA --> na razie tylko twórcy i tylko książki
+written_by_book = pbl_query.copy()[['TW_TWORCA_ID', 'ZA_ZAPIS_ID']].rename(columns={'TW_TWORCA_ID': 'authorId', 'ZA_ZAPIS_ID': 'bookId'})
+
+written_by_book['authorId'] = written_by_book['authorId'].apply(lambda x: f"author_{x}")
+written_by_book['bookId'] = written_by_book['bookId'].apply(lambda x: f"book_{x}")
+
+written_by_book.to_excel('test_written_by_book.xlsx', index=False)
 
 #%% notatki
 
