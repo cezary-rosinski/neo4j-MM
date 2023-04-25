@@ -16,6 +16,9 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 import pickle
 import requests
+sys.path.insert(1, 'C:/Users/Cezary/Documents/SPUB-project')
+from geonames_accounts import geonames_users
+import random
 
 #%% def
 
@@ -74,7 +77,7 @@ connection = cx_Oracle.connect(user=pbl_user, password=pbl_password, dsn=dsn_tns
 #%% Harvesting
 
 #%%Entities
-###Person
+###Person --> na razie tu tylko twórcy, docelowo mają być wszystkie osoby
 
 # old_persons_file = pd.read_excel(r"C:\Users\Cezary\Downloads\kartoteka osób - 11.10.2018 - gotowe_po_konfliktach.xlsx")
 # tw_tworca_id_list = [int(e) for e in old_persons_file['tw_tworca_id'].drop_duplicates().dropna().to_list()]
@@ -93,7 +96,7 @@ mapowanie_bn_pbl = ['1_Bhwzo0xu4yTn8tF0ZNAZq9iIAqIxfcrjeLVCm_mggM', '1L-7Zv9EyLr
 df = pd.DataFrame()
 for file in tqdm(mapowanie_bn_pbl):
     temp_df = gsheet_to_df(file, 'pbl_bn')
-    temp_df = temp_df.loc[temp_df['czy_ten_sam'] == 'tak']
+    temp_df = temp_df.loc[temp_df['czy_ten_sam'].isin('tak', 'raczej tak')]
     df = pd.concat([df, temp_df])
     
 pbl_viaf = df.copy()[['pbl_id', 'viaf']].rename(columns={'pbl_id': 'TW_TWORCA_ID'})
@@ -136,6 +139,7 @@ for label in tqdm(labels_dict):
 pbl_persons['debutant'] = pbl_persons['TW_TWORCA_ID'].apply(lambda x: x in debiutanci)
 pbl_persons = pbl_persons[['TW_TWORCA_ID', 'TW_IMIE', 'TW_NAZWISKO', 'gender', 'born', 'died', 'birthPlace', 'deathPlace', 'debutant']].rename(columns={'TW_TWORCA_ID': 'authorId', 'TW_IMIE': 'name', 'TW_NAZWISKO': 'surname'})
 pbl_persons['authorId'] = pbl_persons['authorId'].apply(lambda x: f"author_{x}")
+pbl_persons['creator'] = True
 
 pbl_persons.to_excel('test_persons.xlsx', index=False)
 
@@ -154,18 +158,38 @@ pbl_journals['journalId'] = pbl_journals['journalId'].apply(lambda x: f"journal_
 
 pbl_journals.to_excel('test_journals.xlsx', index=False)
 
-###JournalPiece
+###JournalArticle
 pbl_query = """select * from IBL_OWNER.pbl_zapisy z
 full outer join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
 full outer join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
-where z.za_type like 'PU'"""
+where z.za_type in ('IZA', 'PU')"""
 pbl_query = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
 
-pbl_journal_pieces = pbl_query.copy()[['ZA_ZAPIS_ID', 'ZA_TYTUL', 'RZ_NAZWA', 'ZA_ZRODLO_NR', 'ZA_ZRODLO_STR']].rename(columns={'ZA_ZAPIS_ID': 'jPieceId', 'ZA_TYTUL': 'title', 'RZ_NAZWA': 'genre', 'ZA_ZRODLO_NR': 'number', 'ZA_ZRODLO_STR': 'numberOfPages'})
+pbl_journal_articles = pbl_query.copy()[['ZA_ZAPIS_ID', 'ZA_TYTUL', 'RZ_NAZWA', 'ZA_ZRODLO_NR', 'ZA_ZRODLO_STR', 'ZA_ZRODLO_ROK', 'ZA_TYPE']].rename(columns={'ZA_ZAPIS_ID': 'jArticleId', 'ZA_TYTUL': 'title', 'RZ_NAZWA': 'genre', 'ZA_ZRODLO_NR': 'issue', 'ZA_ZRODLO_ROK': 'year', 'ZA_ZRODLO_STR': 'numberOfPages'})
 
-pbl_journal_pieces['jPieceId'] = pbl_journal_pieces['jPieceId'].apply(lambda x: f"journalpiece_{x}")
+pbl_journal_articles['type'] = pbl_journal_articles['ZA_TYPE'].apply(lambda x: 'Literature' if x == 'PU' else 'Secondary')
+pbl_journal_articles.drop(columns='ZA_TYPE', inplace=True)
+pbl_journal_articles['jArticleId'] = pbl_journal_articles['jArticleId'].apply(lambda x: f"journalarticle_{x}")
 
-pbl_journal_pieces.to_excel('test_journal_pieces.xlsx', index=False)
+def count_pages(x):
+    if pd.isnull(x):
+        return None
+    elif len(re.findall('\d+', x)) == 1:
+        return 1
+    elif len(re.findall('\d+-\d+', x)) == 1:
+        y = [int(e) for e in re.findall('\d+-\d+', x)[0].split('-')]
+        if y[-1] > y[0]:
+            return y[-1] - y[0] + 1
+        else:
+            return int(str(y[0])[:-1] + str(y[-1])) - y[0] + 1
+    elif re.findall('\d+', x) and ',' in x and '-' not in x:
+        return len(re.findall('(?<![a-z] )\d+', x))
+    elif re.findall('\d+', x) and ',' in x and '-' in x:
+        return sum([ele[-1] - ele[0] + 1 for ele in [[int(el) for el in e.split('-')] for e in re.findall('\d+-\d+', x)]])      
+
+pbl_journal_articles['numberOfPages'] = pbl_journal_articles['numberOfPages'].apply(lambda x: count_pages(x))
+
+pbl_journal_articles.to_excel('test_journal_articles.xlsx', index=False)
 
 ###Book
 pbl_query = """select * from IBL_OWNER.pbl_zapisy z
@@ -177,19 +201,33 @@ pbl_books = pbl_query.copy()[['ZA_ZAPIS_ID', 'ZA_TYTUL', 'ZA_RO_ROK', 'RZ_NAZWA'
 
 pbl_books['bookId'] = pbl_books['bookId'].apply(lambda x: f"book_{x}")
 
+def count_pages_books(x):
+    if pd.isnull(x):
+        return None
+    else:
+        try:
+            return re.findall('\d+', x.split('s.')[0])[0]
+        except: None
+
+pbl_books['numberOfPages'] = pbl_books['numberOfPages'].apply(lambda x: count_pages_books(x))
+
 pbl_books.to_excel('test_books.xlsx', index=False)
 
 ###Publisher
 pbl_query = """select * from IBL_OWNER.pbl_wydawnictwa"""
 pbl_query = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
 
-pbl_publishers = pbl_query.copy()[['WY_WYDAWNICTWO_ID', 'WY_NAZWA', 'WY_MIASTO']].rename(columns={'WY_WYDAWNICTWO_ID': 'publisherId', 'WY_NAZWA': 'name', 'WY_MIASTO': 'locatedIn'})
+# pbl_publishers = pbl_query.copy()[['WY_WYDAWNICTWO_ID', 'WY_NAZWA', 'WY_MIASTO']].rename(columns={'WY_WYDAWNICTWO_ID': 'publisherId', 'WY_NAZWA': 'name', 'WY_MIASTO': 'locatedIn'})
+pbl_publishers = pbl_query.copy()[['WY_WYDAWNICTWO_ID', 'WY_NAZWA', 'WY_MIASTO']].rename(columns={'WY_WYDAWNICTWO_ID': 'publisherId', 'WY_NAZWA': 'name'})
 
 pbl_publishers['publisherId'] = pbl_publishers['publisherId'].apply(lambda x: f"publisher_{x}")
 
 pbl_publishers.to_excel('test_publishers.xlsx', index=False)
 
 ###Location
+
+
+!!!TUTAJ!!!
 kartoteka_miejsc_PBL = gsheet_to_df('1p6avLXYVk5M0kyWAF7zkVel1N7Nh4WH-ykPQN0tYK0c', 'Sheet1')
 kartoteka_miejsc_PBL = kartoteka_miejsc_PBL.loc[kartoteka_miejsc_PBL['status INO'] != 'INO']
 grouped = kartoteka_miejsc_PBL.groupby('query name')
@@ -205,6 +243,27 @@ for name, group in tqdm(grouped):
     
 pbl_location = pbl_location[['geonamesId', 'query name', 'countryName']].rename(columns={'query name': 'city', 'geonamesId': 'locationId', 'countryName': 'country'})
 pbl_location['coordinates'] = ''
+
+pbl_places = pbl_location['locationId'].drop_duplicates().to_list()
+
+def harvest_geonames(geoname_id):
+    user = random.choice(geonames_users)
+    #w funkcję wpisać losowanie randomowego username
+    try:
+        r = requests.get(f'http://api.geonames.org/getJSON?geonameId={geoname_id}&username={user}').json()
+        geonames_resp[geoname_id] = {k:v for k,v in r.items() if k in ['lat', 'lng', 'name', 'countryName']}
+    except KeyError:
+        harvest_geonames(geoname_id)
+
+geonames_resp = {}
+with ThreadPoolExecutor() as executor:
+    list(tqdm(executor.map(harvest_geonames, pbl_places), total=len(pbl_places)))
+
+places2 = {k for k,v in geonames_resp.items() if not v}
+
+geonames_resp = {}
+with ThreadPoolExecutor() as executor:
+    list(tqdm(executor.map(harvest_geonames, places2), total=len(places2)))
 
 pbl_location.to_excel('test_locations.xlsx', index=False)
 
