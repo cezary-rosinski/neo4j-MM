@@ -3,8 +3,10 @@
 import cx_Oracle
 import sys
 sys.path.insert(1, 'C:/Users/Cezary/Documents/IBL-PAN-Python')
+sys.path.insert(1, 'C:/Users/Cezary/Documents/Global-trajectories-of-Czech-Literature')
+from marc_functions import read_mrk, mrk_to_df
 from pbl_credentials import pbl_user, pbl_password
-from my_functions import gsheet_to_df
+from my_functions import gsheet_to_df, marc_parser_dict_for_field
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -21,6 +23,7 @@ from geonames_accounts import geonames_users
 import random
 from glob import glob
 import spacy
+from collections import ChainMap
 
 nlp = spacy.load('pl_core_news_lg')
 
@@ -95,7 +98,7 @@ connection = cx_Oracle.connect(user=pbl_user, password=pbl_password, dsn=dsn_tns
 #%% PBL queries
 pbl_query = """select * from pbl_tworcy"""
 pbl_tworcy = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
-pbl_tworcy = pbl_tworcy[['TW_TWORCA_ID', 'TW_NAZWISKO', 'TW_IMIE', 'TW_DZ_DZIAL_ID']]
+pbl_tworcy = pbl_tworcy[['TW_TWORCA_ID', 'TW_NAZWISKO', 'TW_IMIE', 'TW_DZ_DZIAL_ID', 'TW_UWAGI']]
 
 pbl_query = """select * from IBL_OWNER.pbl_zapisy_tworcy"""
 pbl_zapisy_tworcy = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
@@ -163,6 +166,44 @@ pbl_viaf['TW_TWORCA_ID'] = pbl_viaf['TW_TWORCA_ID'].astype(np.int64)
 
 pbl_persons = pd.merge(pbl_tworcy, pbl_viaf, on='TW_TWORCA_ID', how='left')
 viafy = pbl_persons['viaf'].drop_duplicates().dropna().to_list()
+
+pbl_bn_names = {k:[e for e in v.split('|') if e] for k,v in dict(zip(temp_df['pbl_id'].to_list(), temp_df['BN_name'].to_list())).items()}
+bn_names_pbl = {}
+for k,v in pbl_bn_names.items():
+    for e in v:
+        bn_names_pbl.setdefault(e,k)
+
+# path = r"F:\Cezary\Documents\IBL\BN\bn_all\2023-01-23/"
+# files = [f for f in glob(path + '*.mrk', recursive=True)]
+
+# result = {}
+# for file in tqdm(files):
+#     # file = files[-1]
+#     file = read_mrk(file)
+#     for dictionary in file:
+#         # dictionary = file[0]
+#         if '100' in dictionary:
+#             if '$a' in dictionary.get('100')[0]:
+#                 try:
+#                     author = dict(ChainMap(*marc_parser_dict_for_field(dictionary.get('100')[0], '\\$')))
+#                     author = f"{author.get('$a')} {author.get('$d')}" if all(e in author for e in ['$a', '$d']) else author.get('$a')
+#                     if author:
+#                         author = author[:-1] if author[-1] == '.' else author
+#                         if author in bn_names_pbl:
+#                             if '008' in dictionary:
+#                                 year = dictionary.get('008')[0][7:11]
+#                                 if year.isnumeric():
+#                                     result.setdefault(bn_names_pbl.get(author), set()).add(int(year))
+#                 except IndexError:
+#                     pass
+                
+# with open('person_bn_publishing_years.p', 'wb') as fp:
+#     pickle.dump(result, fp, protocol=pickle.HIGHEST_PROTOCOL)
+    
+with open('person_bn_publishing_years.p', 'rb') as fp:
+    result_bn_years = pickle.load(fp)
+
+result_bn_years = {k:min(v) for k,v in result_bn_years.items()}
 # viafy = viafy[:100]
 
 # viafy_wiki = {}
@@ -197,7 +238,7 @@ for label in tqdm(labels_dict):
     
 pbl_persons['debutant'] = pbl_persons['TW_TWORCA_ID'].apply(lambda x: x in debiutanci)
 pbl_persons = pbl_persons[['TW_TWORCA_ID', 'TW_IMIE', 'TW_NAZWISKO', 'gender', 'born', 'died', 'birthPlace', 'deathPlace', 'debutant']].rename(columns={'TW_TWORCA_ID': 'personId', 'TW_IMIE': 'name', 'TW_NAZWISKO': 'surname'})
-pbl_persons['personId'] = pbl_persons['personId'].apply(lambda x: f"person_{x}")
+
 pbl_persons['creator'] = True
 
 pbl_persons.drop_duplicates(inplace=True)
@@ -210,7 +251,28 @@ wikidata_labels = dict([(f'Q{a[1:]}',c) for a,b,c in wikidata_response])
 
 for column in ['gender', 'birthPlace', 'deathPlace']:
     pbl_persons[column] = pbl_persons[column].apply(lambda x: wikidata_labels.get(x))
+    
+pbl_persons['label'] = pbl_persons['name'] + ' ' + pbl_persons['surname']
+gwiazdkowicze = pbl_tworcy.loc[pbl_tworcy['TW_UWAGI'].str.strip() == 'GWIAZDKOWICZ']['TW_TWORCA_ID'].to_list()
 
+pbl_persons['featured'] = pbl_persons['personId'].apply(lambda x: True if x in gwiazdkowicze else False)
+
+pbl_persons_dzialy = dict(zip(pbl_tworcy['TW_TWORCA_ID'].to_list(), pbl_tworcy['TW_DZ_DZIAL_ID'].to_list()))
+pbl_query = """select * from pbl_dzialy"""
+pbl_dzialy = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
+pbl_dzialy_dict = dict(zip(pbl_dzialy['DZ_DZIAL_ID'].to_list(), pbl_dzialy['DZ_NAZWA'].to_list()))
+pbl_persons_dzialy = {k:pbl_dzialy_dict.get(v) for k,v in pbl_persons_dzialy.items()}
+pbl_persons['natLit'] = pbl_persons['personId'].apply(lambda x: pbl_persons_dzialy.get(x))
+
+
+###tutaj
+pbl_persons['debutant_new'] = pbl_persons[['personId', 'debutant']].apply(lambda x: False if x['personId'] in result_bn_years and result_bn_years.get(x['personId']) < 1990 else True if x['personId'] in result_bn_years and result_bn_years.get(x['personId']) >= 1990 else x['debutant'], axis=1)
+
+test = pbl_persons[['personId', 'debutant', 'debutant_new', 'label']]
+test['test'] = test[['debutant', 'debutant_new']].apply(lambda x: x['debutant'] == x['debutant_new'], axis=1)
+test = test.loc[test['test'] == False]
+
+pbl_persons['personId'] = pbl_persons['personId'].apply(lambda x: f"person_{x}")
 pbl_persons.to_excel('entities_person.xlsx', index=False)
 
 
