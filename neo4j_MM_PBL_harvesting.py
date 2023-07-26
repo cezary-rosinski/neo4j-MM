@@ -92,7 +92,7 @@ def get_wikidata_label(wikidata_id, list_of_languages):
             return (old_wikidata_id, wikidata_id, r.get('entities').get(wikidata_id).get('labels').get(list(record_languages)[0]).get('value'))
 
 #%%PBL connection
-
+# cx_Oracle.init_oracle_client(lib_dir=r"C:\Users\Cezary\Desktop\sqldeveloper\instantclient_19_6")
 dsn_tns = cx_Oracle.makedsn('pbl.ibl.poznan.pl', '1521', service_name='xe')
 connection = cx_Oracle.connect(user=pbl_user, password=pbl_password, dsn=dsn_tns, encoding='windows-1250')
 
@@ -101,8 +101,15 @@ pbl_query = """select * from pbl_tworcy"""
 pbl_tworcy = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
 pbl_tworcy = pbl_tworcy[['TW_TWORCA_ID', 'TW_NAZWISKO', 'TW_IMIE', 'TW_DZ_DZIAL_ID', 'TW_UWAGI']]
 
+pbl_query = """select * from pbl_autorzy"""
+pbl_autorzy = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
+pbl_autorzy = pbl_autorzy[['AM_AUTOR_ID', 'AM_NAZWISKO', 'AM_IMIE', 'AM_KRYPTONIM']]
+
 pbl_query = """select * from IBL_OWNER.pbl_zapisy_tworcy"""
 pbl_zapisy_tworcy = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
+
+pbl_query = """select * from pbl_zapisy_autorzy"""
+pbl_zapisy_autorzy = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
 
 pbl_query = """select * from IBL_OWNER.pbl_zrodla"""
 pbl_zrodla = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
@@ -127,7 +134,7 @@ where z.za_type like 'IR'
 and z.za_rz_rodzaj1_id = 301"""
 pbl_nagrody = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
 
-dfs = {'pbl_rodzaje_zapisow': pbl_rodzaje_zapisow, 'pbl_tworcy': pbl_tworcy, 'pbl_zapisy_tworcy': pbl_zapisy_tworcy, 'pbl_wydawnictwa': pbl_wydawnictwa, 'pbl_zapisy_wydawnictwa': pbl_zapisy_wydawnictwa, 'pbl_zapisy': pbl_zapisy, 'pbl_zrodla': pbl_zrodla, 'pbl_nagrody': pbl_nagrody}
+dfs = {'pbl_rodzaje_zapisow': pbl_rodzaje_zapisow, 'pbl_tworcy': pbl_tworcy, 'pbl_autorzy': pbl_autorzy, 'pbl_zapisy_tworcy': pbl_zapisy_tworcy, 'pbl_wydawnictwa': pbl_wydawnictwa, 'pbl_zapisy_wydawnictwa': pbl_zapisy_wydawnictwa, 'pbl_zapisy': pbl_zapisy, 'pbl_zrodla': pbl_zrodla, 'pbl_nagrody': pbl_nagrody, 'pbl_zapisy_autorzy': pbl_zapisy_autorzy}
 
 for k,v in tqdm(dfs.items()):
     test_dict = v.groupby(v.columns.values[0]).apply(lambda x: x.to_dict('records')).to_dict()
@@ -149,7 +156,12 @@ for file in tqdm(files):
 # old_persons_file = pd.read_excel(r"C:\Users\Cezary\Downloads\kartoteka osób - 11.10.2018 - gotowe_po_konfliktach.xlsx")
 # tw_tworca_id_list = [int(e) for e in old_persons_file['tw_tworca_id'].drop_duplicates().dropna().to_list()]
 
-ksiazki_debiutantow = pd.read_excel(r"F:\Cezary\Documents\IBL\Tabele dla MM\2. książki debiutantów.xlsx")
+tworcy_autorzy = pd.read_excel(r"C:\Users\Cezary\Downloads\kartoteka osób - 11.10.2018 - gotowe_po_konfliktach.xlsx")[['TW_TWORCA_ID', 'AM_AUTOR_ID']]
+
+tworcy_autorzy = tworcy_autorzy.loc[(tworcy_autorzy['TW_TWORCA_ID'].notnull()) &
+                                    (tworcy_autorzy['AM_AUTOR_ID'].notnull())]
+
+ksiazki_debiutantow = pd.read_excel(r"D:\IBL\Tabele dla MM\2. książki debiutantów.xlsx")
 debiutanci = ksiazki_debiutantow['id twórcy'].drop_duplicates().to_list()
 
 # tw_tworca_id_new = pbl_query.loc[~pbl_query['TW_TWORCA_ID'].isin(tw_tworca_id_list)][['TW_TWORCA_ID', 'TW_NAZWISKO', 'TW_IMIE']]
@@ -176,6 +188,16 @@ for k,v in pbl_bn_names.items():
         bn_names_pbl.setdefault(e,k)
         
 pbl_persons = pbl_persons.groupby('TW_TWORCA_ID').head(1)
+pbl_persons['creator'] = True
+
+pbl_persons = pd.merge(pbl_persons, tworcy_autorzy, on='TW_TWORCA_ID', how='outer')
+
+autorzy_merged = [int(e) for e in pbl_persons['AM_AUTOR_ID'].dropna().drop_duplicates().to_list()]
+autorzy_to_be_merged = pbl_autorzy.loc[~pbl_autorzy['AM_AUTOR_ID'].isin(autorzy_merged)].rename(columns={'AM_NAZWISKO': 'TW_NAZWISKO', 'AM_IMIE': 'TW_IMIE'})
+autorzy_to_be_merged['creator'] = False
+
+pbl_persons = pd.concat([pbl_persons, autorzy_to_be_merged])
+
 
 # path = r"F:\Cezary\Documents\IBL\BN\bn_all\2023-01-23/"
 # files = [f for f in glob(path + '*.mrk', recursive=True)]
@@ -241,9 +263,7 @@ for label in tqdm(labels_dict):
     pbl_persons[labels_dict.get(label)] = pbl_persons['wikidata'].apply(lambda x: wikidata_response.get(x).get(label) if x in wikidata_response else x)
     
 pbl_persons['debutant'] = pbl_persons['TW_TWORCA_ID'].apply(lambda x: x in debiutanci)
-pbl_persons = pbl_persons[['TW_TWORCA_ID', 'TW_IMIE', 'TW_NAZWISKO', 'gender', 'born', 'died', 'birthPlace', 'deathPlace', 'debutant']].rename(columns={'TW_TWORCA_ID': 'personId', 'TW_IMIE': 'name', 'TW_NAZWISKO': 'surname'})
-
-pbl_persons['creator'] = True
+pbl_persons = pbl_persons[['TW_TWORCA_ID', 'TW_IMIE', 'TW_NAZWISKO', 'gender', 'born', 'died', 'birthPlace', 'deathPlace', 'debutant', 'creator', 'AM_AUTOR_ID', 'AM_KRYPTONIM']].rename(columns={'TW_TWORCA_ID': 'personId', 'TW_IMIE': 'name', 'TW_NAZWISKO': 'surname'})
 
 pbl_persons.drop_duplicates(inplace=True)
 
@@ -263,6 +283,8 @@ for column in ['gender', 'birthPlace', 'deathPlace']:
     pbl_persons[column] = pbl_persons[column].apply(lambda x: wikidata_labels.get(x))
     
 pbl_persons['label'] = pbl_persons['name'] + ' ' + pbl_persons['surname']
+pbl_persons['label'] = pbl_persons[['label', 'AM_KRYPTONIM']].apply(lambda x: x['AM_KRYPTONIM'] if pd.isnull(x['label']) else x['label'], axis=1)
+
 gwiazdkowicze = pbl_tworcy.loc[pbl_tworcy['TW_UWAGI'].str.strip() == 'GWIAZDKOWICZ']['TW_TWORCA_ID'].to_list()
 
 pbl_persons['featured'] = pbl_persons['personId'].apply(lambda x: True if x in gwiazdkowicze else False)
@@ -277,15 +299,15 @@ pbl_persons['natLit'] = pbl_persons['personId'].apply(lambda x: pbl_persons_dzia
 d = gender.Detector()
 pbl_persons['gender'] = pbl_persons[['gender', 'name']].apply(lambda x: 'male' if x['gender'] and x['gender'] == 'mężczyzna' else 'female' if x['gender'] and x['gender'] in ['femina cisgenera', 'kobieta'] else 'other' if x['gender'] and x['gender'] == 'niebinarność' else d.get_gender(x['name']), axis=1)
 
-pbl_persons['debutant_new'] = pbl_persons[['personId', 'debutant']].apply(lambda x: False if x['personId'] in result_bn_years and result_bn_years.get(x['personId']) < 1990 else True if x['personId'] in result_bn_years and result_bn_years.get(x['personId']) >= 1990 else x['debutant'], axis=1)
+# pbl_persons['debutant_new'] = pbl_persons[['personId', 'debutant']].apply(lambda x: False if x['personId'] in result_bn_years and result_bn_years.get(x['personId']) < 1990 else True if x['personId'] in result_bn_years and result_bn_years.get(x['personId']) >= 1990 else x['debutant'], axis=1)
 
 # test = pbl_persons[['personId', 'debutant', 'debutant_new', 'label']]
 # test['test'] = test[['debutant', 'debutant_new']].apply(lambda x: x['debutant'] == x['debutant_new'], axis=1)
 # test = test.loc[test['test'] == False]
 
-pbl_persons['personId'] = pbl_persons['personId'].apply(lambda x: f"person_{x}")
-pbl_persons.to_csv('entities_person.csv', index=False)
-# pbl_persons.to_excel('entities_person.xlsx', index=False)
+# pbl_persons['personId'] = pbl_persons[['personId', 'AM_AUTOR_ID']].apply(lambda x: f"person_1_{int(x['personId'])}" if pd.notnull(x['personId']) else f"person_2_{int(x['AM_AUTOR_ID'])}", axis=1)
+#muszę poczekać z zapisem, żeby ustalić, kto ma secondary
+# pbl_persons.to_csv('entities_person.csv', index=False)
 
 
 # w pierwszej kolejności w person dać tylko twórców, dać im stałe identyfikatory, pobrać z wiki dodatkowe informacje
@@ -491,30 +513,52 @@ published_by['publisherId'] = published_by['publisherId'].apply(lambda x: f"publ
 published_by.to_csv('relations_published.csv', index=False)
 # published_by.to_excel('relations_published.xlsx', index=False)
 
-###WroteBy
+###Wrote
 
-written_by_book = pbl_zapisy.loc[(pbl_zapisy['ZA_TYPE'] == 'KS') &
+written_by_book1 = pbl_zapisy.loc[(pbl_zapisy['ZA_TYPE'] == 'KS') &
                                  (pbl_zapisy['ZA_RZ_RODZAJ1_ID'] == 1)]
-written_by_book = pd.merge(written_by_book, pbl_zapisy_tworcy, left_on='ZA_ZAPIS_ID', right_on='ZATW_ZA_ZAPIS_ID', how='left')
-written_by_book = pd.merge(written_by_book, pbl_tworcy, left_on='ZATW_TW_TWORCA_ID', right_on='TW_TWORCA_ID', how='left')[['TW_TWORCA_ID', 'ZA_ZAPIS_ID']].rename(columns={'TW_TWORCA_ID': 'personId', 'ZA_ZAPIS_ID': 'bookId/jArticleId'})
+written_by_book1 = pd.merge(written_by_book1, pbl_zapisy_tworcy, left_on='ZA_ZAPIS_ID', right_on='ZATW_ZA_ZAPIS_ID', how='inner')
+written_by_book1 = pd.merge(written_by_book1, pbl_tworcy, left_on='ZATW_TW_TWORCA_ID', right_on='TW_TWORCA_ID', how='left')[['TW_TWORCA_ID', 'ZA_ZAPIS_ID']].rename(columns={'TW_TWORCA_ID': 'personId', 'ZA_ZAPIS_ID': 'bookId/jArticleId'})
+written_by_book1['personId'] = written_by_book1['personId'].apply(lambda x: f"person_1_{x}")
 
-written_by_book = written_by_book.loc[written_by_book['personId'].notnull()]
+written_by_book2 = pbl_zapisy.loc[(pbl_zapisy['ZA_TYPE'] == 'KS')]
+written_by_book2 = written_by_book2.loc[~written_by_book2['ZA_ZAPIS_ID'].isin(written_by_book1['bookId/jArticleId'])]
+written_by_book2 = pd.merge(written_by_book2, pbl_zapisy_autorzy, left_on='ZA_ZAPIS_ID', right_on='ZAAM_ZA_ZAPIS_ID', how='inner')
+written_by_book2 = pd.merge(written_by_book2, pbl_autorzy, left_on='ZAAM_AM_AUTOR_ID', right_on='AM_AUTOR_ID', how='left')[['AM_AUTOR_ID', 'ZA_ZAPIS_ID']].rename(columns={'AM_AUTOR_ID': 'personId', 'ZA_ZAPIS_ID': 'bookId/jArticleId'})
+secondary_authors1 = written_by_book2['personId'].to_list()
+written_by_book2['personId'] = written_by_book2['personId'].apply(lambda x: f"person_2_{x}")
 
-written_by_book['personId'] = written_by_book['personId'].apply(lambda x: f"person_{int(x)}")
+written_by_book = pd.concat([written_by_book1, written_by_book2])
 written_by_book['bookId/jArticleId'] = written_by_book['bookId/jArticleId'].apply(lambda x: f"book_{x}")
 
-written_by_article = pbl_zapisy.loc[pbl_zapisy['ZA_TYPE'] == 'PU']
-written_by_article = pd.merge(written_by_article, pbl_zapisy_tworcy, left_on='ZA_ZAPIS_ID', right_on='ZATW_ZA_ZAPIS_ID', how='left')
-written_by_article = pd.merge(written_by_article, pbl_tworcy, left_on='ZATW_TW_TWORCA_ID', right_on='TW_TWORCA_ID', how='left')[['TW_TWORCA_ID', 'ZA_ZAPIS_ID']].rename(columns={'TW_TWORCA_ID': 'personId', 'ZA_ZAPIS_ID': 'bookId/jArticleId'})
+written_by_article1 = pbl_zapisy.loc[pbl_zapisy['ZA_TYPE'] == 'PU']
+written_by_article1 = pd.merge(written_by_article1, pbl_zapisy_tworcy, left_on='ZA_ZAPIS_ID', right_on='ZATW_ZA_ZAPIS_ID', how='inner')
+written_by_article1 = pd.merge(written_by_article1, pbl_tworcy, left_on='ZATW_TW_TWORCA_ID', right_on='TW_TWORCA_ID', how='left')[['TW_TWORCA_ID', 'ZA_ZAPIS_ID']].rename(columns={'TW_TWORCA_ID': 'personId', 'ZA_ZAPIS_ID': 'bookId/jArticleId'})
+written_by_article1['personId'] = written_by_article1['personId'].apply(lambda x: f"person_1_{x}")
 
-written_by_article = written_by_article.loc[written_by_article['personId'].notnull()]
+written_by_article2 = pbl_zapisy.loc[pbl_zapisy['ZA_TYPE'] == 'IZA']
+written_by_article2 = pd.merge(written_by_article2, pbl_zapisy_autorzy, left_on='ZA_ZAPIS_ID', right_on='ZAAM_ZA_ZAPIS_ID', how='inner')
+written_by_article2 = pd.merge(written_by_article2, pbl_autorzy, left_on='ZAAM_AM_AUTOR_ID', right_on='AM_AUTOR_ID', how='left')[['AM_AUTOR_ID', 'ZA_ZAPIS_ID']].rename(columns={'AM_AUTOR_ID': 'personId', 'ZA_ZAPIS_ID': 'bookId/jArticleId'})
+secondary_authors2 = written_by_article2['personId'].to_list()
+written_by_article2['personId'] = written_by_article2['personId'].apply(lambda x: f"person_2_{x}")
 
-written_by_article['personId'] = written_by_article['personId'].apply(lambda x: f"person_{int(x)}")
+written_by_article = pd.concat([written_by_article1, written_by_article2])
 written_by_article['bookId/jArticleId'] = written_by_article['bookId/jArticleId'].apply(lambda x: f"journalarticle_{x}")
 
 written_by = pd.concat([written_by_book, written_by_article])
 
 written_by.to_csv('relations_wrote_by.csv', index=False)
+
+#uzupełnienie pbl persons
+
+secondary_authors = set(secondary_authors1 + secondary_authors2)
+secondary_authors = {e:True for e in secondary_authors}
+
+pbl_persons['secondary'] = pbl_persons['AM_AUTOR_ID'].apply(lambda x: secondary_authors.get(x, False))
+pbl_persons['personId'] = pbl_persons[['personId', 'AM_AUTOR_ID']].apply(lambda x: f"person_1_{int(x['personId'])}" if pd.notnull(x['personId']) else f"person_2_{int(x['AM_AUTOR_ID'])}", axis=1)
+
+pbl_persons.to_csv('entities_person.csv', index=False)
+
 # written_by.to_excel('relations_written_by.xlsx', index=False)
 
 ###WasAwarded
@@ -594,34 +638,34 @@ is_about.to_csv('relations_is_about.csv', index=False)
 
 #%% notatki
 
-test = old_persons_file.sample(1000)
+# test = old_persons_file.sample(1000)
 
 
-pbl_articles_query = """select z.za_zapis_id "rekord_id", z.za_type "typ", rz.rz_rodzaj_id "rodzaj_zapisu_id", rz.rz_nazwa "rodzaj_zapisu", dz.dz_dzial_id "dzial_id", dz.dz_nazwa "dzial", to_char(tw.tw_tworca_id) "tworca_id", tw.tw_nazwisko "tworca_nazwisko", tw.tw_imie "tworca_imie", to_char(a.am_autor_id) "autor_id", (case when a.am_nazwisko is null then a.am_kryptonim else a.am_nazwisko end) "autor_nazwisko", a.am_imie "autor_imie", z.za_tytul "tytul", z.za_opis_wspoltworcow "wspoltworcy", fo.fo_nazwa "funkcja_osoby", to_char(os.os_osoba_id) "wspoltworca_id", os.os_nazwisko "wspoltworca_nazwisko", os.os_imie "wspoltworca_imie", z.za_adnotacje "adnotacja", z.za_adnotacje2 "adnotacja2", z.za_adnotacje3 "adnotacja3", to_char(zr.zr_zrodlo_id) "czasopismo_id", zr.zr_tytul "czasopismo", z.za_zrodlo_rok "rok", z.za_zrodlo_nr "numer", z.za_zrodlo_str "strony",z.za_tytul_oryginalu,z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA,z.ZA_TYPE
-                    from pbl_zapisy z
-                    full outer join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
-                    full outer join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
-                    full outer join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
-                    full outer join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
-                    full outer join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
-                    full outer join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
-                    full outer join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
-                    full outer join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id = z.za_zapis_id
-                    full outer join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
-                    full outer join IBL_OWNER.pbl_funkcje_osob fo on fo.fo_symbol=uo.uo_fo_symbol
-                    where z.za_type in ('IZA','PU')
-                    and zr.zr_tytul is not null
-                    and zr.zr_tytul not like 'x'"""                  
-pbl_sh_query1 = """select hpz.hz_za_zapis_id,hp.hp_nazwa,khp.kh_nazwa
-                from IBL_OWNER.pbl_hasla_przekrojowe hp
-                join IBL_OWNER.pbl_hasla_przekr_zapisow hpz on hpz.hz_hp_haslo_id=hp.hp_haslo_id
-                join IBL_OWNER.pbl_klucze_hasla_przekr khp on khp.kh_hp_haslo_id=hp.hp_haslo_id
-                join IBL_OWNER.pbl_hasla_zapisow_klucze hzk on hzk.hzkh_hz_hp_haslo_id=hp.hp_haslo_id and hzk.hzkh_kh_klucz_id=khp.kh_klucz_id and hzk.hzkh_hz_za_zapis_id=hpz.hz_za_zapis_id"""               
-pbl_sh_query2 = """select hpz.hz_za_zapis_id,hp.hp_nazwa,to_char(null) "KH_NAZWA"
-                from IBL_OWNER.pbl_hasla_przekrojowe hp
-                join IBL_OWNER.pbl_hasla_przekr_zapisow hpz on hpz.hz_hp_haslo_id=hp.hp_haslo_id"""
+# pbl_articles_query = """select z.za_zapis_id "rekord_id", z.za_type "typ", rz.rz_rodzaj_id "rodzaj_zapisu_id", rz.rz_nazwa "rodzaj_zapisu", dz.dz_dzial_id "dzial_id", dz.dz_nazwa "dzial", to_char(tw.tw_tworca_id) "tworca_id", tw.tw_nazwisko "tworca_nazwisko", tw.tw_imie "tworca_imie", to_char(a.am_autor_id) "autor_id", (case when a.am_nazwisko is null then a.am_kryptonim else a.am_nazwisko end) "autor_nazwisko", a.am_imie "autor_imie", z.za_tytul "tytul", z.za_opis_wspoltworcow "wspoltworcy", fo.fo_nazwa "funkcja_osoby", to_char(os.os_osoba_id) "wspoltworca_id", os.os_nazwisko "wspoltworca_nazwisko", os.os_imie "wspoltworca_imie", z.za_adnotacje "adnotacja", z.za_adnotacje2 "adnotacja2", z.za_adnotacje3 "adnotacja3", to_char(zr.zr_zrodlo_id) "czasopismo_id", zr.zr_tytul "czasopismo", z.za_zrodlo_rok "rok", z.za_zrodlo_nr "numer", z.za_zrodlo_str "strony",z.za_tytul_oryginalu,z.za_te_teatr_id,z.ZA_UZYTK_WPIS_DATA,z.ZA_UZYTK_MOD_DATA,z.ZA_TYPE
+#                     from pbl_zapisy z
+#                     full outer join IBL_OWNER.pbl_zapisy_tworcy zt on zt.zatw_za_zapis_id=z.za_zapis_id
+#                     full outer join IBL_OWNER.pbl_tworcy tw on zt.zatw_tw_tworca_id=tw.tw_tworca_id
+#                     full outer join IBL_OWNER.pbl_zapisy_autorzy za on za.zaam_za_zapis_id=z.za_zapis_id
+#                     full outer join IBL_OWNER.pbl_autorzy a on za.zaam_am_autor_id=a.am_autor_id
+#                     full outer join IBL_OWNER.pbl_zrodla zr on zr.zr_zrodlo_id=z.za_zr_zrodlo_id
+#                     full outer join IBL_OWNER.pbl_dzialy dz on dz.dz_dzial_id=z.za_dz_dzial1_id
+#                     full outer join IBL_OWNER.pbl_rodzaje_zapisow rz on rz.rz_rodzaj_id=z.za_rz_rodzaj1_id
+#                     full outer join IBL_OWNER.pbl_udzialy_osob uo on uo.uo_za_zapis_id = z.za_zapis_id
+#                     full outer join IBL_OWNER.pbl_osoby os on uo.uo_os_osoba_id=os.os_osoba_id
+#                     full outer join IBL_OWNER.pbl_funkcje_osob fo on fo.fo_symbol=uo.uo_fo_symbol
+#                     where z.za_type in ('IZA','PU')
+#                     and zr.zr_tytul is not null
+#                     and zr.zr_tytul not like 'x'"""                  
+# pbl_sh_query1 = """select hpz.hz_za_zapis_id,hp.hp_nazwa,khp.kh_nazwa
+#                 from IBL_OWNER.pbl_hasla_przekrojowe hp
+#                 join IBL_OWNER.pbl_hasla_przekr_zapisow hpz on hpz.hz_hp_haslo_id=hp.hp_haslo_id
+#                 join IBL_OWNER.pbl_klucze_hasla_przekr khp on khp.kh_hp_haslo_id=hp.hp_haslo_id
+#                 join IBL_OWNER.pbl_hasla_zapisow_klucze hzk on hzk.hzkh_hz_hp_haslo_id=hp.hp_haslo_id and hzk.hzkh_kh_klucz_id=khp.kh_klucz_id and hzk.hzkh_hz_za_zapis_id=hpz.hz_za_zapis_id"""               
+# pbl_sh_query2 = """select hpz.hz_za_zapis_id,hp.hp_nazwa,to_char(null) "KH_NAZWA"
+#                 from IBL_OWNER.pbl_hasla_przekrojowe hp
+#                 join IBL_OWNER.pbl_hasla_przekr_zapisow hpz on hpz.hz_hp_haslo_id=hp.hp_haslo_id"""
 
-pbl_persons_index_query = """select odi_za_zapis_id, odi_nazwisko, odi_imie
-                from IBL_OWNER.pbl_osoby_do_indeksu"""
+# pbl_persons_index_query = """select odi_za_zapis_id, odi_nazwisko, odi_imie
+#                 from IBL_OWNER.pbl_osoby_do_indeksu"""
 
-pbl_books = pd.read_sql(pbl_books_query, con=connection).fillna(value = np.nan)
+# pbl_books = pd.read_sql(pbl_books_query, con=connection).fillna(value = np.nan)
