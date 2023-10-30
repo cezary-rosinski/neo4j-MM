@@ -6,7 +6,7 @@ sys.path.insert(1, 'C:/Users/Cezary/Documents/IBL-PAN-Python')
 sys.path.insert(1, 'C:/Users/Cezary/Documents/Global-trajectories-of-Czech-Literature')
 from marc_functions import read_mrk, mrk_to_df
 from pbl_credentials import pbl_user, pbl_password
-from my_functions import gsheet_to_df, marc_parser_dict_for_field
+from my_functions import gsheet_to_df#, marc_parser_dict_for_field
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -100,40 +100,40 @@ connection = cx_Oracle.connect(user=pbl_user, password=pbl_password, dsn=dsn_tns
 pbl_query = """select * from pbl_tworcy"""
 pbl_tworcy = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
 pbl_tworcy = pbl_tworcy[['TW_TWORCA_ID', 'TW_NAZWISKO', 'TW_IMIE', 'TW_DZ_DZIAL_ID', 'TW_UWAGI']]
-
+print('pbl_tworcy')
 pbl_query = """select * from pbl_autorzy"""
 pbl_autorzy = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
 pbl_autorzy = pbl_autorzy[['AM_AUTOR_ID', 'AM_NAZWISKO', 'AM_IMIE', 'AM_KRYPTONIM']]
-
+print('pbl_autorzy')
 pbl_query = """select * from IBL_OWNER.pbl_zapisy_tworcy"""
 pbl_zapisy_tworcy = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
-
+print('pbl_zapisy_tworcy')
 pbl_query = """select * from pbl_zapisy_autorzy"""
 pbl_zapisy_autorzy = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
-
+print('pbl_zapisy_autorzy')
 pbl_query = """select * from IBL_OWNER.pbl_zrodla"""
 pbl_zrodla = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
-
+print('pbl_zrodla')
 pbl_query = """select * from IBL_OWNER.pbl_zapisy"""
 pbl_zapisy = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
 pbl_zapisy = pbl_zapisy[['ZA_ZAPIS_ID', 'ZA_TYPE', 'ZA_RO_ROK', 'ZA_RZ_RODZAJ1_ID', 'ZA_RZ_RODZAJ2_ID', 'ZA_DZ_DZIAL1_ID',
        'ZA_DZ_DZIAL2_ID', 'ZA_TYTUL', 'ZA_OPIS_WSPOLTWORCOW', 'ZA_MIEJSCE_WYDANIA', 'ZA_WY_WYDAWNICTWO_ID', 'ZA_ROK_WYDANIA', 'ZA_OPIS_FIZYCZNY_KSIAZKI', 'ZA_ZR_ZRODLO_ID', 'ZA_ZRODLO_ROK', 'ZA_ZRODLO_NR', 'ZA_ZRODLO_STR']]
 #następnym razem zastosować select z.za_zapis_id, z.za_type, z.za_ro_rok, z.za_rz_rodzaj1_id, z.za_rz_rodzaj2_id, z.za_tytul, z.za_rok_wydania, z.za_opis_fizyczny_ksiazki, z.za_zr_zrodlo_id, z.za_zrodlo_rok, z.za_zrodlo_nr, z.za_zrodlo_str from IBL_OWNER.pbl_zapisy z
-
+print('pbl_zapisy')
 pbl_query = """select * from IBL_OWNER.pbl_rodzaje_zapisow"""
 pbl_rodzaje_zapisow = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
-
+print('pbl_rodzaje_zapisow')
 pbl_query = """select * from IBL_OWNER.pbl_wydawnictwa"""
 pbl_wydawnictwa = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
-
+print('pbl_wydawnictwa')
 pbl_query = """select * from IBL_OWNER.pbl_zapisy_wydawnictwa"""
 pbl_zapisy_wydawnictwa = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
-
+print('pbl_zapisy_wydawnictwa')
 pbl_query = """select * from pbl_zapisy z
 where z.za_type like 'IR'
 and z.za_rz_rodzaj1_id = 301"""
 pbl_nagrody = pd.read_sql(pbl_query, con=connection).fillna(value = np.nan)
-
+print('pbl_nagrody')
 dfs = {'pbl_rodzaje_zapisow': pbl_rodzaje_zapisow, 'pbl_tworcy': pbl_tworcy, 'pbl_autorzy': pbl_autorzy, 'pbl_zapisy_tworcy': pbl_zapisy_tworcy, 'pbl_wydawnictwa': pbl_wydawnictwa, 'pbl_zapisy_wydawnictwa': pbl_zapisy_wydawnictwa, 'pbl_zapisy': pbl_zapisy, 'pbl_zrodla': pbl_zrodla, 'pbl_nagrody': pbl_nagrody, 'pbl_zapisy_autorzy': pbl_zapisy_autorzy}
 
 for k,v in tqdm(dfs.items()):
@@ -492,58 +492,58 @@ pbl_prizes.to_csv('entities_prize.csv', index=False)
 #%%Relations
 ###WasPublishedIn
 
-published_in = pbl_zapisy.loc[pbl_zapisy['ZA_TYPE'].isin(['IZA', 'PU'])]
-published_in = pd.merge(published_in, pbl_zrodla, left_on='ZA_ZR_ZRODLO_ID', right_on='ZR_ZRODLO_ID', how='left')[['ZA_ZAPIS_ID', 'ZR_ZRODLO_ID']].rename(columns={'ZA_ZAPIS_ID': 'jArticleId', 'ZR_ZRODLO_ID': 'journalId'})
-published_in = published_in.loc[published_in['journalId'].notnull()]
-published_in['jArticleId'] = published_in['jArticleId'].apply(lambda x: f"journalarticle_{x}")
-published_in['journalId'] = published_in['journalId'].apply(lambda x: f"journal_{int(x)}")
+published_journal = pbl_zapisy.loc[pbl_zapisy['ZA_TYPE'].isin(['IZA', 'PU'])]
+published_journal = pd.merge(published_journal, pbl_zrodla, left_on='ZA_ZR_ZRODLO_ID', right_on='ZR_ZRODLO_ID', how='left')[['ZA_ZAPIS_ID', 'ZR_ZRODLO_ID']].rename(columns={'ZA_ZAPIS_ID': 'jArticleId', 'ZR_ZRODLO_ID': 'journalId'})
+published_journal = published_journal.loc[published_journal['journalId'].notnull()]
+published_journal['jArticleId'] = published_journal['jArticleId'].apply(lambda x: f"journalarticle_{x}")
+published_journal['journalId'] = published_journal['journalId'].apply(lambda x: f"journal_{int(x)}")
 
-published_in.to_csv('relations_was_published_in.csv', index=False)
-# published_in.to_excel('relations_was_published_in.xlsx', index=False)
+published_journal.to_csv('relations_published_journal.csv', index=False)
+# published_journal.to_excel('relations_was_published_journal.xlsx', index=False)
 
 ###Published
 
-published_by = pbl_zapisy.loc[pbl_zapisy['ZA_TYPE'] == 'KS']
-published_by = pd.merge(published_by, pbl_zapisy_wydawnictwa, left_on='ZA_ZAPIS_ID', right_on='ZAWY_ZA_ZAPIS_ID', how='left')
-published_by = pd.merge(published_by, pbl_wydawnictwa, left_on='ZAWY_WY_WYDAWNICTWO_ID', right_on='WY_WYDAWNICTWO_ID', how='left')[['ZA_ZAPIS_ID', 'WY_WYDAWNICTWO_ID']].rename(columns={'ZA_ZAPIS_ID': 'bookId', 'WY_WYDAWNICTWO_ID': 'publisherId'})
-published_by = published_by.loc[published_by['publisherId'].notnull()]
-published_by['bookId'] = published_by['bookId'].apply(lambda x: f"book_{x}")
-published_by['publisherId'] = published_by['publisherId'].apply(lambda x: f"publisher_{int(x)}")
+published_book = pbl_zapisy.loc[pbl_zapisy['ZA_TYPE'] == 'KS']
+published_book = pd.merge(published_book, pbl_zapisy_wydawnictwa, left_on='ZA_ZAPIS_ID', right_on='ZAWY_ZA_ZAPIS_ID', how='left')
+published_book = pd.merge(published_book, pbl_wydawnictwa, left_on='ZAWY_WY_WYDAWNICTWO_ID', right_on='WY_WYDAWNICTWO_ID', how='left')[['ZA_ZAPIS_ID', 'WY_WYDAWNICTWO_ID']].rename(columns={'ZA_ZAPIS_ID': 'bookId', 'WY_WYDAWNICTWO_ID': 'publisherId'})
+published_book = published_book.loc[published_book['publisherId'].notnull()]
+published_book['bookId'] = published_book['bookId'].apply(lambda x: f"book_{x}")
+published_book['publisherId'] = published_book['publisherId'].apply(lambda x: f"publisher_{int(x)}")
 
-published_by.to_csv('relations_published.csv', index=False)
-# published_by.to_excel('relations_published.xlsx', index=False)
+published_book.to_csv('relations_published_book.csv', index=False)
+# published_book.to_excel('relations_published.xlsx', index=False)
 
 ###Wrote
 
 written_by_book1 = pbl_zapisy.loc[(pbl_zapisy['ZA_TYPE'] == 'KS') &
                                  (pbl_zapisy['ZA_RZ_RODZAJ1_ID'] == 1)]
 written_by_book1 = pd.merge(written_by_book1, pbl_zapisy_tworcy, left_on='ZA_ZAPIS_ID', right_on='ZATW_ZA_ZAPIS_ID', how='inner')
-written_by_book1 = pd.merge(written_by_book1, pbl_tworcy, left_on='ZATW_TW_TWORCA_ID', right_on='TW_TWORCA_ID', how='left')[['TW_TWORCA_ID', 'ZA_ZAPIS_ID']].rename(columns={'TW_TWORCA_ID': 'personId', 'ZA_ZAPIS_ID': 'bookId/jArticleId'})
+written_by_book1 = pd.merge(written_by_book1, pbl_tworcy, left_on='ZATW_TW_TWORCA_ID', right_on='TW_TWORCA_ID', how='left')[['TW_TWORCA_ID', 'ZA_ZAPIS_ID']].rename(columns={'TW_TWORCA_ID': 'personId', 'ZA_ZAPIS_ID': 'id'})
 written_by_book1['personId'] = written_by_book1['personId'].apply(lambda x: f"person_1_{x}")
 
 written_by_book2 = pbl_zapisy.loc[(pbl_zapisy['ZA_TYPE'] == 'KS')]
-written_by_book2 = written_by_book2.loc[~written_by_book2['ZA_ZAPIS_ID'].isin(written_by_book1['bookId/jArticleId'])]
+written_by_book2 = written_by_book2.loc[~written_by_book2['ZA_ZAPIS_ID'].isin(written_by_book1['id'])]
 written_by_book2 = pd.merge(written_by_book2, pbl_zapisy_autorzy, left_on='ZA_ZAPIS_ID', right_on='ZAAM_ZA_ZAPIS_ID', how='inner')
-written_by_book2 = pd.merge(written_by_book2, pbl_autorzy, left_on='ZAAM_AM_AUTOR_ID', right_on='AM_AUTOR_ID', how='left')[['AM_AUTOR_ID', 'ZA_ZAPIS_ID']].rename(columns={'AM_AUTOR_ID': 'personId', 'ZA_ZAPIS_ID': 'bookId/jArticleId'})
+written_by_book2 = pd.merge(written_by_book2, pbl_autorzy, left_on='ZAAM_AM_AUTOR_ID', right_on='AM_AUTOR_ID', how='left')[['AM_AUTOR_ID', 'ZA_ZAPIS_ID']].rename(columns={'AM_AUTOR_ID': 'personId', 'ZA_ZAPIS_ID': 'id'})
 secondary_authors1 = written_by_book2['personId'].to_list()
 written_by_book2['personId'] = written_by_book2['personId'].apply(lambda x: f"person_2_{x}")
 
 written_by_book = pd.concat([written_by_book1, written_by_book2])
-written_by_book['bookId/jArticleId'] = written_by_book['bookId/jArticleId'].apply(lambda x: f"book_{x}")
+written_by_book['id'] = written_by_book['id'].apply(lambda x: f"book_{x}")
 
 written_by_article1 = pbl_zapisy.loc[pbl_zapisy['ZA_TYPE'] == 'PU']
 written_by_article1 = pd.merge(written_by_article1, pbl_zapisy_tworcy, left_on='ZA_ZAPIS_ID', right_on='ZATW_ZA_ZAPIS_ID', how='inner')
-written_by_article1 = pd.merge(written_by_article1, pbl_tworcy, left_on='ZATW_TW_TWORCA_ID', right_on='TW_TWORCA_ID', how='left')[['TW_TWORCA_ID', 'ZA_ZAPIS_ID']].rename(columns={'TW_TWORCA_ID': 'personId', 'ZA_ZAPIS_ID': 'bookId/jArticleId'})
+written_by_article1 = pd.merge(written_by_article1, pbl_tworcy, left_on='ZATW_TW_TWORCA_ID', right_on='TW_TWORCA_ID', how='left')[['TW_TWORCA_ID', 'ZA_ZAPIS_ID']].rename(columns={'TW_TWORCA_ID': 'personId', 'ZA_ZAPIS_ID': 'id'})
 written_by_article1['personId'] = written_by_article1['personId'].apply(lambda x: f"person_1_{x}")
 
 written_by_article2 = pbl_zapisy.loc[pbl_zapisy['ZA_TYPE'] == 'IZA']
 written_by_article2 = pd.merge(written_by_article2, pbl_zapisy_autorzy, left_on='ZA_ZAPIS_ID', right_on='ZAAM_ZA_ZAPIS_ID', how='inner')
-written_by_article2 = pd.merge(written_by_article2, pbl_autorzy, left_on='ZAAM_AM_AUTOR_ID', right_on='AM_AUTOR_ID', how='left')[['AM_AUTOR_ID', 'ZA_ZAPIS_ID']].rename(columns={'AM_AUTOR_ID': 'personId', 'ZA_ZAPIS_ID': 'bookId/jArticleId'})
+written_by_article2 = pd.merge(written_by_article2, pbl_autorzy, left_on='ZAAM_AM_AUTOR_ID', right_on='AM_AUTOR_ID', how='left')[['AM_AUTOR_ID', 'ZA_ZAPIS_ID']].rename(columns={'AM_AUTOR_ID': 'personId', 'ZA_ZAPIS_ID': 'id'})
 secondary_authors2 = written_by_article2['personId'].to_list()
 written_by_article2['personId'] = written_by_article2['personId'].apply(lambda x: f"person_2_{x}")
 
 written_by_article = pd.concat([written_by_article1, written_by_article2])
-written_by_article['bookId/jArticleId'] = written_by_article['bookId/jArticleId'].apply(lambda x: f"journalarticle_{x}")
+written_by_article['id'] = written_by_article['id'].apply(lambda x: f"journalarticle_{x}")
 
 written_by = pd.concat([written_by_book, written_by_article])
 
@@ -595,18 +595,18 @@ pbl_geo_names = dict(zip(geonames_df_with_pbl['pblName'], geonames_df_with_pbl['
 
 located_in_publisher = pbl_publishers_with_place.copy()
 located_in_publisher['locationId'] = located_in_publisher['WY_MIASTO'].apply(lambda x: pbl_geo_names.get(x))
-located_in_publisher = located_in_publisher.loc[located_in_publisher['locationId'].notnull()][['publisherId', 'locationId']].rename(columns={'publisherId': 'publisherId/journalId/bookId'})
+located_in_publisher = located_in_publisher.loc[located_in_publisher['locationId'].notnull()][['publisherId', 'locationId']].rename(columns={'publisherId': 'id'})
 
 located_in_journal = pbl_journals_with_place.copy()
 located_in_journal['locationId'] = located_in_journal['ZR_MIEJSCE_WYD'].apply(lambda x: pbl_geo_names.get(x))
-located_in_journal = located_in_journal.loc[located_in_journal['locationId'].notnull()][['journalId', 'locationId']].rename(columns={'journalId': 'publisherId/journalId/bookId'})
+located_in_journal = located_in_journal.loc[located_in_journal['locationId'].notnull()][['journalId', 'locationId']].rename(columns={'journalId': 'id'})
 
 located_in_book = pbl_zapisy.loc[pbl_zapisy['ZA_TYPE'] == 'KS']
 located_in_book = pd.merge(located_in_book, pbl_zapisy_wydawnictwa, left_on='ZA_ZAPIS_ID', right_on='ZAWY_ZA_ZAPIS_ID', how='left')
-located_in_book = pd.merge(located_in_book, pbl_wydawnictwa, left_on='ZAWY_WY_WYDAWNICTWO_ID', right_on='WY_WYDAWNICTWO_ID', how='left')[['ZA_ZAPIS_ID', 'WY_MIASTO']].rename(columns={'ZA_ZAPIS_ID': 'publisherId/journalId/bookId', 'WY_MIASTO': 'locationId'})
+located_in_book = pd.merge(located_in_book, pbl_wydawnictwa, left_on='ZAWY_WY_WYDAWNICTWO_ID', right_on='WY_WYDAWNICTWO_ID', how='left')[['ZA_ZAPIS_ID', 'WY_MIASTO']].rename(columns={'ZA_ZAPIS_ID': 'id', 'WY_MIASTO': 'locationId'})
 located_in_book['locationId'] = located_in_book['locationId'].apply(lambda x: pbl_geo_names.get(x))
 located_in_book = located_in_book.loc[located_in_book['locationId'].notnull()]
-located_in_book['publisherId/journalId/bookId'] = located_in_book['publisherId/journalId/bookId'].apply(lambda x: f"book_{x}")
+located_in_book['id'] = located_in_book['id'].apply(lambda x: f"book_{x}")
 
 located_in = pd.concat([located_in_publisher, located_in_journal, located_in_book])
 
@@ -617,19 +617,19 @@ located_in.to_csv('relations_located_in.csv', index=False)
 is_about_book = pbl_zapisy.loc[(pbl_zapisy['ZA_TYPE'] == 'KS') &
                                (pbl_zapisy['ZA_RZ_RODZAJ1_ID'].isin([2, 764]))]                              
 is_about_book = pd.merge(is_about_book, pbl_zapisy_tworcy, left_on='ZA_ZAPIS_ID', right_on='ZATW_ZA_ZAPIS_ID', how='left')
-is_about_book = pd.merge(is_about_book, pbl_tworcy, left_on='ZATW_TW_TWORCA_ID', right_on='TW_TWORCA_ID', how='left')[['TW_TWORCA_ID', 'ZA_ZAPIS_ID']].rename(columns={'TW_TWORCA_ID': 'personId', 'ZA_ZAPIS_ID': 'bookId/jArticleId'})
+is_about_book = pd.merge(is_about_book, pbl_tworcy, left_on='ZATW_TW_TWORCA_ID', right_on='TW_TWORCA_ID', how='left')[['TW_TWORCA_ID', 'ZA_ZAPIS_ID']].rename(columns={'TW_TWORCA_ID': 'personId', 'ZA_ZAPIS_ID': 'id'})
 is_about_book = is_about_book.loc[is_about_book['personId'].notnull()]
-is_about_book['personId'] = is_about_book['personId'].apply(lambda x: f"person_{int(x)}")
-is_about_book['bookId/jArticleId'] = is_about_book['bookId/jArticleId'].apply(lambda x: f"book_{x}")
+is_about_book['personId'] = is_about_book['personId'].apply(lambda x: f"person_1_{int(x)}")
+is_about_book['id'] = is_about_book['id'].apply(lambda x: f"book_{x}")
 
 is_about_article = pbl_zapisy.loc[pbl_zapisy['ZA_TYPE'] == 'IZA']
 is_about_article = pd.merge(is_about_article, pbl_zapisy_tworcy, left_on='ZA_ZAPIS_ID', right_on='ZATW_ZA_ZAPIS_ID', how='left')
-is_about_article = pd.merge(is_about_article, pbl_tworcy, left_on='ZATW_TW_TWORCA_ID', right_on='TW_TWORCA_ID', how='left')[['TW_TWORCA_ID', 'ZA_ZAPIS_ID']].rename(columns={'TW_TWORCA_ID': 'personId', 'ZA_ZAPIS_ID': 'bookId/jArticleId'})
+is_about_article = pd.merge(is_about_article, pbl_tworcy, left_on='ZATW_TW_TWORCA_ID', right_on='TW_TWORCA_ID', how='left')[['TW_TWORCA_ID', 'ZA_ZAPIS_ID']].rename(columns={'TW_TWORCA_ID': 'personId', 'ZA_ZAPIS_ID': 'id'})
 
 is_about_article = is_about_article.loc[is_about_article['personId'].notnull()]
 
-is_about_article['personId'] = is_about_article['personId'].apply(lambda x: f"person_{int(x)}")
-is_about_article['bookId/jArticleId'] = is_about_article['bookId/jArticleId'].apply(lambda x: f"journalarticle_{x}")
+is_about_article['personId'] = is_about_article['personId'].apply(lambda x: f"person_1_{int(x)}")
+is_about_article['id'] = is_about_article['id'].apply(lambda x: f"journalarticle_{x}")
 
 is_about = pd.concat([is_about_book, is_about_article])
 
