@@ -8,22 +8,91 @@ The resource consists of bibliographic data selected from the ["Polish Literary 
 **Institute of Literary Research of the Polish Academy of Sciences**, [www.ibl.waw.pl](https://ibl.waw.pl/)
 
 ## Resource design
-The collected texts come from different sources.
-- subcorpus of anthologies (program texts, criticism, and literary theory), 
-- subcorpus of literary persons (selections of writings), 
-- subcorpus of periodicals, 
-- subcorpus of monographs.
+The resource of bibliographic data consists of the following data entities:
+- Person, 
+- Journal, 
+- Journal Article, 
+- Book,
+- Publisher,
+- Location,
+- Prize.
+And following relations among these entities:
+- Article published in a Journal (PublishedJournal),
+- Book published by a Publisher (PublishedBook),
+- Article or Book written by a Person (Wrote),
+- Person awarded in a Prize (Awarded),
+- Location of a Publisher, Journal, or printing of the Book (LocatedIn),
+- Book or Journal about a Person (IsAbout).
 
-### Balancing criteria
-
-- literary era (or sub-period), 
-- branch of literary studies (history, criticism, theory), 
-- length of text, current of literary studies (e.g., structuralism, deconstruction), 
-- place of publication (e.g., Lviv, Krakow, Warsaw), 
-- gender of the author, 
-- reception (number of reprints, citations, mentions in syllabuses).
-
-Each criterion will be assigned a minimum and maximum value for the percentage of texts from each pool (e.g., a minimum of 20% of critical-literary texts, but no more than 33%), then we will determine the proportions for each period, taking into account the unevenness of production (e.g., a minimum of 5% and a maximum of 65% of titles from a given period should have a female author) - we will use expert consultation in determining the proportions.
+### Data structure
+#### Entities
+```
+Person:
+- personId
+- name
+- surname
+- gender (M/F/U)
+- born
+- died
+- birthPlace
+- deathPlace
+- creator (TRUE/FALSE)
+- secondary (TRUE/FALSE)
+- debutant (TRUE/FALSE)
+Journal (miejsce publikacji)
+- journalId
+- name
+- ISSN
+JournalArticle (artykuł przedmiotowy/utwór w czasopiśmie)
+- jArticleId
+- title
+- genre
+- issue
+- year
+- numberOfPages
+- type (Literature/Secondary)
+Book
+- bookId
+- title
+- year
+- genre
+- numberOfPages
+- type (Literature/Secondary)
+Publisher
+- publisherId
+- name
+Location
+- locationId
+- city
+- country
+- coordinates
+- region
+Prize
+- prizeId
+- name
+- year
+```
+#### Relations
+```
+PublishedJournal
+- jArticleId
+- journalId
+PublishedBook
+- bookId
+- publisherId
+Wrote
+- personId
+- bookId / jArticleId
+Awarded
+- personId
+- prizeId
+LocatedIn
+- publisherId / journalId / bookId
+- locationId
+IsAbout
+- bookId / jArticleId
+- personId
+```
 
 ### Limitations
 
