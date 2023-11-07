@@ -96,9 +96,9 @@ IsAbout
 
 ### Limitations
 
-- imprecise definition of the population – there is no complete list of publications in the field of literary studies, and the lists that can be compiled from available bibliographic data are not exhaustive
-- uneven availability of publications in digital form – in particular, there is little availability of texts published between 1920 and 1990
-- copyright – licenses prevent the use of particular texts in corpus work
+The „Polish Literary Bibliography” publishing series has been printed since 1954, with 45 annuals published by 2000, containing materials for the years 1944/45–1988.
+The printed volumes of the PBL have been digitalized and they are available in the [Digital Repository of Scientific Institutes](https://rcin.org.pl/dlibra/publication/79343).
+The online PBL database is limited to data from 1989–2023.
 
 ### Statistics
 
