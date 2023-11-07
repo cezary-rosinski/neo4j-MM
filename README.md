@@ -16,6 +16,7 @@ The resource of bibliographic data consists of the following data entities:
 - Publisher,
 - Location,
 - Prize.
+
 And following relations among these entities:
 - Article published in a Journal (PublishedJournal),
 - Book published by a Publisher (PublishedBook),
