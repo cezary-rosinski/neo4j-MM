@@ -103,7 +103,7 @@ The online PBL database is limited to data from 1989–2023.
 
 ### Statistics
 
-The dataset consists of 1,074,952 Entities and 2,074,321 Relations.
+The dataset consists of 1,072,086 Entities and 2,074,321 Relations.
 
 <p align="center">
   <img src="Number of Entities.png" alt="Number of Entitiess – statistics" width="65%">
