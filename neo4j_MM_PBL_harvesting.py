@@ -547,7 +547,7 @@ written_by_article['id'] = written_by_article['id'].apply(lambda x: f"journalart
 
 written_by = pd.concat([written_by_book, written_by_article])
 
-written_by.to_csv('relations_wrote_by.csv', index=False)
+written_by.to_csv('relations_wrote.csv', index=False)
 
 #uzupełnienie pbl persons
 
