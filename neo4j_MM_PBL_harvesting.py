@@ -161,6 +161,8 @@ tworcy_autorzy = pd.read_excel(r"C:\Users\Cezary\Downloads\kartoteka osób - 11.
 tworcy_autorzy = tworcy_autorzy.loc[(tworcy_autorzy['TW_TWORCA_ID'].notnull()) &
                                     (tworcy_autorzy['AM_AUTOR_ID'].notnull())]
 
+autorzy_tworcy_dict = dict(zip(tworcy_autorzy['AM_AUTOR_ID'], tworcy_autorzy['TW_TWORCA_ID']))
+
 ksiazki_debiutantow = pd.read_excel(r"D:\IBL\Tabele dla MM\2. książki debiutantów.xlsx")
 debiutanci = ksiazki_debiutantow['id twórcy'].drop_duplicates().to_list()
 
@@ -524,11 +526,18 @@ written_by_book1['personId'] = written_by_book1['personId'].apply(lambda x: f"pe
 written_by_book2 = pbl_zapisy.loc[(pbl_zapisy['ZA_TYPE'] == 'KS')]
 written_by_book2 = written_by_book2.loc[~written_by_book2['ZA_ZAPIS_ID'].isin(written_by_book1['id'])]
 written_by_book2 = pd.merge(written_by_book2, pbl_zapisy_autorzy, left_on='ZA_ZAPIS_ID', right_on='ZAAM_ZA_ZAPIS_ID', how='inner')
-written_by_book2 = pd.merge(written_by_book2, pbl_autorzy, left_on='ZAAM_AM_AUTOR_ID', right_on='AM_AUTOR_ID', how='left')[['AM_AUTOR_ID', 'ZA_ZAPIS_ID']].rename(columns={'AM_AUTOR_ID': 'personId', 'ZA_ZAPIS_ID': 'id'})
-secondary_authors1 = written_by_book2['personId'].to_list()
-written_by_book2['personId'] = written_by_book2['personId'].apply(lambda x: f"person_2_{x}")
+written_by_book2 = pd.merge(written_by_book2, pbl_autorzy, left_on='ZAAM_AM_AUTOR_ID', right_on='AM_AUTOR_ID', how='left')
 
-written_by_book = pd.concat([written_by_book1, written_by_book2])
+written_by_book2['personId'] = written_by_book2['AM_AUTOR_ID'].apply(lambda x: f"person_1_{int(autorzy_tworcy_dict.get(x))}" if x in autorzy_tworcy_dict else None)
+
+written_by_book3 = written_by_book2[written_by_book2['personId'].isnull()][['AM_AUTOR_ID', 'ZA_ZAPIS_ID']].rename(columns={'AM_AUTOR_ID': 'personId', 'ZA_ZAPIS_ID': 'id'})
+written_by_book2 = written_by_book2[written_by_book2['personId'].notnull()][['personId', 'ZA_ZAPIS_ID']].rename(columns={'ZA_ZAPIS_ID': 'id'})
+written_by_book3['personId'] = written_by_book3['personId'].apply(lambda x: f"person_2_{x}")
+
+secondary_authors = written_by_book2['personId'].to_list()
+secondary_authors.extend(written_by_book3['personId'].to_list())
+
+written_by_book = pd.concat([written_by_book1, written_by_book2, written_by_book3])
 written_by_book['id'] = written_by_book['id'].apply(lambda x: f"book_{x}")
 
 written_by_article1 = pbl_zapisy.loc[pbl_zapisy['ZA_TYPE'] == 'PU']
@@ -538,11 +547,18 @@ written_by_article1['personId'] = written_by_article1['personId'].apply(lambda x
 
 written_by_article2 = pbl_zapisy.loc[pbl_zapisy['ZA_TYPE'] == 'IZA']
 written_by_article2 = pd.merge(written_by_article2, pbl_zapisy_autorzy, left_on='ZA_ZAPIS_ID', right_on='ZAAM_ZA_ZAPIS_ID', how='inner')
-written_by_article2 = pd.merge(written_by_article2, pbl_autorzy, left_on='ZAAM_AM_AUTOR_ID', right_on='AM_AUTOR_ID', how='left')[['AM_AUTOR_ID', 'ZA_ZAPIS_ID']].rename(columns={'AM_AUTOR_ID': 'personId', 'ZA_ZAPIS_ID': 'id'})
-secondary_authors2 = written_by_article2['personId'].to_list()
-written_by_article2['personId'] = written_by_article2['personId'].apply(lambda x: f"person_2_{x}")
+written_by_article2 = pd.merge(written_by_article2, pbl_autorzy, left_on='ZAAM_AM_AUTOR_ID', right_on='AM_AUTOR_ID', how='left')
 
-written_by_article = pd.concat([written_by_article1, written_by_article2])
+written_by_article2['personId'] = written_by_article2['AM_AUTOR_ID'].apply(lambda x: f"person_1_{int(autorzy_tworcy_dict.get(x))}" if x in autorzy_tworcy_dict else None)
+
+written_by_article3 = written_by_article2[written_by_article2['personId'].isnull()][['AM_AUTOR_ID', 'ZA_ZAPIS_ID']].rename(columns={'AM_AUTOR_ID': 'personId', 'ZA_ZAPIS_ID': 'id'})
+written_by_article2 = written_by_article2[written_by_article2['personId'].notnull()][['personId', 'ZA_ZAPIS_ID']].rename(columns={'ZA_ZAPIS_ID': 'id'})
+written_by_article3['personId'] = written_by_article3['personId'].apply(lambda x: f"person_2_{x}")
+
+secondary_authors.extend(written_by_article2['personId'].to_list())
+secondary_authors.extend(written_by_article3['personId'].to_list())
+
+written_by_article = pd.concat([written_by_article1, written_by_article2, written_by_article3])
 written_by_article['id'] = written_by_article['id'].apply(lambda x: f"journalarticle_{x}")
 
 written_by = pd.concat([written_by_book, written_by_article])
@@ -551,7 +567,7 @@ written_by.to_csv('relations_wrote.csv', index=False)
 
 #uzupełnienie pbl persons
 
-secondary_authors = set(secondary_authors1 + secondary_authors2)
+secondary_authors = set(secondary_authors)
 secondary_authors = {e:True for e in secondary_authors}
 
 pbl_persons['secondary'] = pbl_persons['AM_AUTOR_ID'].apply(lambda x: secondary_authors.get(x, False))
