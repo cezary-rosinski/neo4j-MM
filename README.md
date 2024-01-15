@@ -113,14 +113,6 @@ The dataset consists of 1,072,086 Entities and 2,074,321 Relations.
   <img src="Number of Relations.png" alt="Number of Relations – statistics" width="65%">
 </p>
 
-## Access
-
-TBD
-
-### Metadata
-
-TBD
-
 ## How to use
 
 - Source: [https://github.com/cezary-rosinski/neo4j-MM/blob/main/PBL_entities_relations.7z](https://github.com/cezary-rosinski/neo4j-MM/blob/main/PBL_entities_relations.7z)
