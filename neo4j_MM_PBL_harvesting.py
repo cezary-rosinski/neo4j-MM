@@ -579,6 +579,7 @@ pbl_persons['personId'] = pbl_persons[['personId', 'AM_AUTOR_ID']].apply(lambda 
 debiutanci_update_mm = debiutanci_update_mm['Id'].to_list()
 pbl_persons['debutant'] = pbl_persons[['personId', 'debutant']].apply(lambda x: False if x['personId'] in debiutanci_update_mm else x['debutant'], axis=1)
 pbl_persons.loc[pbl_persons['personId'].isin(['person_1_53117', 'person_1_240429']), 'creator'] = False
+pbl_persons.loc[pbl_persons['personId'].isin(['person_1_53117', 'person_1_240429']), 'debutant'] = False
 
 pbl_persons.to_csv('entities_person.csv', index=False)
 
