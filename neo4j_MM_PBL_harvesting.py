@@ -165,6 +165,7 @@ autorzy_tworcy_dict = dict(zip(tworcy_autorzy['AM_AUTOR_ID'], tworcy_autorzy['TW
 
 ksiazki_debiutantow = pd.read_excel(r"D:\IBL\Tabele dla MM\2. książki debiutantów.xlsx")
 debiutanci = ksiazki_debiutantow['id twórcy'].drop_duplicates().to_list()
+debiutanci_update_mm = gsheet_to_df('1b-RAmZuFQgMSnd5yI6EZM2kRnL7vjAY1Yj3iQA_JPnI', 'ID')
 
 # tw_tworca_id_new = pbl_query.loc[~pbl_query['TW_TWORCA_ID'].isin(tw_tworca_id_list)][['TW_TWORCA_ID', 'TW_NAZWISKO', 'TW_IMIE']]
 # tw_tworca_id_new.to_excel('test.xlsx', index=False)
@@ -364,6 +365,8 @@ def count_pages(x):
         return sum([ele[-1] - ele[0] + 1 for ele in [[int(el) for el in e.split('-')] for e in re.findall('\d+-\d+', x)]])      
 
 pbl_journal_articles['numberOfPages'] = pbl_journal_articles['numberOfPages'].apply(lambda x: count_pages(x))
+
+pbl_journal_articles.loc[pbl_journal_articles['jArticleId'] == 'journalarticle_1852232', 'year'] = 2008
 
 pbl_journal_articles.to_csv('entities_journal_article.csv', index=False)
 # pbl_journal_articles.to_excel('entities_journal_article.xlsx', index=False)
@@ -572,6 +575,10 @@ secondary_authors = {e:True for e in secondary_authors}
 
 pbl_persons['secondary'] = pbl_persons['AM_AUTOR_ID'].apply(lambda x: secondary_authors.get(x, False))
 pbl_persons['personId'] = pbl_persons[['personId', 'AM_AUTOR_ID']].apply(lambda x: f"person_1_{int(x['personId'])}" if pd.notnull(x['personId']) else f"person_2_{int(x['AM_AUTOR_ID'])}", axis=1)
+
+debiutanci_update_mm = debiutanci_update_mm['Id'].to_list()
+pbl_persons['debutant'] = pbl_persons[['personId', 'debutant']].apply(lambda x: False if x['personId'] in debiutanci_update_mm else x['debutant'], axis=1)
+pbl_persons.loc[pbl_persons['personId'].isin(['person_1_53117', 'person_1_240429']), 'creator'] = False
 
 pbl_persons.to_csv('entities_person.csv', index=False)
 
